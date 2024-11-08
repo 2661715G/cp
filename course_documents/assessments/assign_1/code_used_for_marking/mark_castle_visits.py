@@ -124,7 +124,6 @@ def do_testing(verbose = False):
   if verbose:
     print("Total:  " + str(marks) + " of a possible " + str(max_marks))
   return marks
-
 try:
   verbose = sys.argv[3]
 except IndexError:

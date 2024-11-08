@@ -15,6 +15,7 @@ import networkx as nx
 # (The dictionary structure is so you can return other things if it's 
 # useful for your pipeline)
 def run_ilp(instance_graph, start_node = 1, timeout=1000):
+  print(instance_graph)
   return {'num_saved': random.randint(1,10)}
 
 
