@@ -125,7 +125,7 @@ def do_testing(verbose = False):
     print("Total:  " + str(marks) + " of a possible " + str(max_marks))
   return marks
   
-print(do_testing(verbose = False))
+print(do_testing(verbose = True))
 
 
 # #  This is example marking code for a typical instance - for some (eg edge or unsatisfiable) instances I test with, not all marks will be available.
