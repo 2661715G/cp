@@ -2,6 +2,7 @@ import random
 import networkx as nx
 import time
 import minizinc
+import pulp
 # you will likely need to import other things
 
 
@@ -17,7 +18,90 @@ import minizinc
 # (The dictionary structure is so you can return other things if it's 
 # useful for your pipeline)
 def run_ilp(instance_graph, start_node = 1, timeout=1000):
-  return {'num_saved': random.randint(1,10)}
+    
+  time_steps = 5  # Number of time steps
+  N = 4  # Number of nodes
+  from_list = [0, 1, 2, 3] 
+  to_list   = [1, 2, 3, 0]
+  initially_on_fire = [0] 
+
+  model = pulp.LpProblem("Firefighter_Problem", pulp.LpMinimize)
+
+  firefighter = pulp.LpVariable.dicts("firefighter", ((time, node) for time in range(time_steps) for node in range(N)), cat="Binary")
+  on_fire = pulp.LpVariable.dicts("on_fire", ((time, node) for time in range(time_steps) for node in range(N)), cat="Binary")
+
+  # Objective: Minimize the number of nodes on fire
+  model += pulp.lpSum(on_fire[time_steps-1, node] for node in range(N))
+
+  # Constraints
+  # Node(s) start on fire
+  for node in range(N):
+      if node in initially_on_fire:
+          model += on_fire[0, node] == 1
+          model += firefighter[0,node] != 1
+      else:
+          model += on_fire[0, node] == 0
+
+  # Only one node can be defended per time step
+  model += pulp.lpSum(firefighter[0, node] for node in range(N)) <= 1
+  
+  for time in range(1,time_steps):
+      model += pulp.lpSum(firefighter[time, node] for node in range(N)) <= 1 + pulp.lpSum(firefighter[time-1, node] for node in range(N))
+      
+  # Time step for spread
+  for time in range(1, time_steps):
+    for node in range(N):
+          
+      #Nodes cannot stop burning
+      if on_fire[time - 1, node]:
+        model += on_fire[time, node] ==1
+        
+        #Continue skips iteration for current node
+        continue
+      
+      #Nodes cannot stop being defended
+      if firefighter[time-1, node]==1:
+        model += firefighter[time, node] == 1
+      
+      #Defended nodes can't catch fire
+      if firefighter[time, node] == 1:
+        model += on_fire[time, node] == 0
+        continue
+      
+      #Flaming nodes cannot be defended
+      if on_fire[time-1, node] == 1:
+        model += firefighter[time, node] == 0
+        continue
+      
+      
+      # Iterate until burning neighbor found
+      i = 0
+      burning_neighbor = False
+      while not burning_neighbor and i < len(from_list):
+          #Checks if a neighbor was burning at the previous time step
+          if to_list[i] == node:
+              burning_neighbor = (on_fire[time - 1, from_list[i]] == 1)
+          elif from_list[i] == node:
+              burning_neighbor = (on_fire[time - 1, to_list[i]] == 1)
+          i += 1
+
+      # If a burning neighbor was found, the node catches fire
+      model += on_fire[time, node] >= burning_neighbor
+
+
+  # Solve the model
+  model.solve()
+
+  # Print results
+  print("Status:", pulp.LpStatus[model.status])
+  for time in range(time_steps):
+      for node in range(N):
+          if pulp.value(firefighter[time, node]) == 1:
+              print(f"Time {time}: Firefighter protects node {node}")
+          if pulp.value(on_fire[time, node]) == 1:
+              print(f"Time {time}: Node {node} is on fire")
+
+  return {'Finished'}
 
 
 
@@ -98,7 +182,8 @@ def flatten_graph(graph,node_to_start):
     return converted_edges, node_to_start
         
 if __name__=="__main__":
-  # graph = nx.path_graph(12)
-  graph = nx.grid_2d_graph(10,10)
-  cp = run_cp(graph, start_node = (0,5))
-  print(cp)
+  graph = nx.path_graph(12)
+  # graph = nx.grid_2d_graph(10,10)
+  # cp = run_cp(graph, start_node = (0,5))
+  # print(cp)
+  print(run_ilp(graph))
