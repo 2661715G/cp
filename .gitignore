@@ -129,3 +129,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+course_documents/assessments/assign_2/cp_assn_2_skeleton_code/Graph_to_solve.dzn
