@@ -1,0 +1,12 @@
+{
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.analysis.extraPaths": [
+        "${workspacefolder}/main:${workspacefolder}/tests"
+    ],
+    "python.testing.pytestArgs": [
+        "--cov=src",
+        "--cov-report=xml",
+        "tests"
+    ]
+}
