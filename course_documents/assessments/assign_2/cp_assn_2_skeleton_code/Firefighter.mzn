@@ -1,4 +1,6 @@
+%include "3x3Graph.dzn";
 % Number of nodes
+
 int: n;
 set of int: NODE = 0..n-1;
 
@@ -22,8 +24,10 @@ array[0..length] of var NODE: firefighter;
 array[TIME, NODE] of var bool: defended;
 
 constraint forall(node in NODE where node != firefighter[0])(
+    %Nodes start undefended, except the one that is defended
     defended[0,node] = 0
 );
+constraint(defended[0,fire_start] =0);
 
 constraint forall(t in 1..max(TIME), node in NODE)(
     if (on_fire[t,node] = 1)then(
