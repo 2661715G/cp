@@ -22,11 +22,15 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
     
   from_list, to_list, num_nodes, start_node = reformat_graph(instance_graph, start_node)
   
+  from_list = [0,0,1,1,2,2,3,3,4,4,5];
+  to_list   = [1,4,2,3,5,8,6,8,5,8,7];
+  start_node = 0;
+  num_nodes = 9
   time_steps = num_nodes + 1
 
   defended = pulp.LpVariable.dicts("defended", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
   on_fire = pulp.LpVariable.dicts("on_fire", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
-  firefighter_placed = pulp.LpVariable.dicts("firefighter_placed", ((time) for time in range(time_steps)), cat="Binary")
+  firefighter_placed = pulp.LpVariable.dicts("firefighter_placed", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
 
   # Objective: Minimize the number of nodes on fire at the final time step
   model = pulp.LpProblem("Firefighter_Problem", pulp.LpMinimize)
@@ -45,24 +49,22 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
         list_of_neighbors.append(from_list[i])
         
     neighbor_dict[node] = list_of_neighbors
+               
                      
-
   # Constraints
-  # Node(s) start on fire
-  for node in range(num_nodes):
-    if node == start_node:
-        model += on_fire[0, node] == 1
-        model += defended[0, node] == 0
-    else:
-        model += on_fire[0, node] == 0
+  # Only one additional firefighter per time step
+  for time in range(time_steps):
+        model += pulp.lpSum(firefighter_placed[time, node] for node in range(num_nodes)) <= 1
+    
 
-  # One additional node can be defended at each step
-  model += pulp.lpSum(defended[0, node] for node in range(num_nodes)) <=1
-  model += defended[0, firefighter_placed[0]] >= 1
-  for time in range(1, time_steps):
-        #If a firefighter is placed at a node, it becomes defended
-        model += defended[time, firefighter_placed[time]] >= 1
-        # model += pulp.lpSum(defended[time, node] for node in range(num_nodes)) <= pulp.lpSum(defended[time, node] for node in range(num_nodes)) + 1
+  # Node(s) start on fire and set initial defense state
+  for node in range(num_nodes):
+      if node == start_node:
+        model += on_fire[0, node] == 1
+      else:
+        model += on_fire[0, node] == 0
+      model += defended[0,node] == 0
+
         
   # Constraints for fire spread and defense behavior over time
   for time in range(1, time_steps):
@@ -70,9 +72,9 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
       # Nodes continue burning once ignited
       model += on_fire[time, node] >= on_fire[time - 1, node]
       
-      # Nodes continue being defended once protected
-      model += defended[time, node] >= defended[time - 1, node]
-
+      # Node stays defended
+      model += defended[time,node] >= defended[time-1,node]
+      
       # Protected nodes do not catch fire
       model += on_fire[time, node] <= 1 - defended[time, node]
 
@@ -81,13 +83,12 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
 
       # Check for any burning neighbors and, if found, spread the fire
       burning_neighbor = pulp.lpSum(on_fire[time - 1, neighbor] for neighbor in neighbor_dict[node])
-      # Normalise sum to be 1 or 0 
-      model += on_fire[time, node] >= burning_neighbor/len(burning_neighbor) - defended[time-1, node]
+      model += on_fire[time, node] >= burning_neighbor/len(burning_neighbor) - defended[time-1, node] - firefighter_placed[time,node]
       
-      # Check for any defended neighbors and, if found, spread the defence
+      # Check for any defended neighbors and, if found, spread the defense
       defended_neighbor = pulp.lpSum(defended[time - 1, neighbor] for neighbor in neighbor_dict[node])
-      # Normalise sum to be 1 or 0
-      model += defended[time, node] >= defended_neighbor/len(defended_neighbor) - on_fire[time-1, node]
+      model += defended[time, node] <= defended[time - 1, node] + firefighter_placed[time, node] + defended_neighbor
+
 
   #GLPK expects timeout to be a string in seconds, and an integer
   timeout_seconds = str(int(timeout/1000))
@@ -101,17 +102,22 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
   else:
         result_dict["Timeout"] = False
   
+  
   if __name__ == "__main__":
     for time in range(time_steps):
+          
+      firefighters = [(node, pulp.value(firefighter_placed[time, node])) for node in range(num_nodes) if pulp.value(firefighter_placed[time, node]) is not None]
       # Defended nodes and their values
       defended_nodes = [(node, pulp.value(defended[time, node])) for node in range(num_nodes) if pulp.value(defended[time, node]) is not None]
+      
       
       # On fire nodes and their values
       on_fire_nodes = [(node, pulp.value(on_fire[time, node])) for node in range(num_nodes) if pulp.value(on_fire[time, node]) is not None]
       
       print(f"Time {time}:")
+      print("  Firefighters:             ", firefighters)
       print("  Defended nodes and values:", defended_nodes)
-      print("  On fire nodes and values:", on_fire_nodes)
+      print("  On fire nodes and values: ", on_fire_nodes)
       print("\n")
     print(neighbor_dict)
     
@@ -207,6 +213,6 @@ def flatten_graph(graph,node_to_start):
 if __name__=="__main__":
   graph = nx.path_graph(12)
   # graph = nx.grid_2d_graph(10,10)
-  cp = run_cp(graph, start_node = (5))
+  # cp = run_cp(graph, start_node = (5))
   ilp = run_ilp(graph, start_node= (5))
-  print(cp,ilp)
+  print(ilp)

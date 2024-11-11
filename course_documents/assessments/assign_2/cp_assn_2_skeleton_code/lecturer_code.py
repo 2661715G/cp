@@ -47,9 +47,9 @@ def skeleton_runs():
    
    
    
-# print(skeleton_runs())
-start, graph = generate_binary_tree_instance(4)
-print(run_trial(graph, start, timeout=5000))
+print(skeleton_runs())
+# start, graph = generate_binary_tree_instance(4)
+# print(run_trial(graph, start, timeout=5000))
 
 # start, graph = generate_ladder_instance()
 # print(run_trial(submitted_solution.run_cp(graph, start, timeout=5000)["num_saved"]))
