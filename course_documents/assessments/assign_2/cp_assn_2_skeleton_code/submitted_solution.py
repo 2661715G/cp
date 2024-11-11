@@ -1,8 +1,9 @@
 import random
 import networkx as nx
-import time
+import time as timePy
 import minizinc
 import pulp
+from datetime import timedelta
 # you will likely need to import other things
 
 
@@ -17,13 +18,11 @@ import pulp
 # or None if the model does not halt in the time allowed
 # (The dictionary structure is so you can return other things if it's 
 # useful for your pipeline)
-def run_ilp(instance_graph, start_node = 1, timeout=1000):
+def run_ilp(instance_graph, start_node = 1, timeout=10000):
     
-  num_nodes = 4
+  from_list, to_list, num_nodes, start_node = reformat_graph(instance_graph, start_node)
+  
   time_steps = num_nodes + 1
-  from_list = [0, 1, 2, 3]
-  to_list = [1, 2, 3, 0]
-  initially_on_fire = [0]
 
   firefighter = pulp.LpVariable.dicts("firefighter", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
   on_fire = pulp.LpVariable.dicts("on_fire", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
@@ -50,7 +49,7 @@ def run_ilp(instance_graph, start_node = 1, timeout=1000):
   # Constraints
   # Node(s) start on fire
   for node in range(num_nodes):
-    if node in initially_on_fire:
+    if node == start_node:
         model += on_fire[0, node] == 1
         model += firefighter[0, node] == 0
     else:
@@ -81,8 +80,17 @@ def run_ilp(instance_graph, start_node = 1, timeout=1000):
       # Normalise sum to be 1 
       model += on_fire[time, node] >= burning_neighbor/len(burning_neighbor) - firefighter[time-1, node]
 
-  model.solve(pulp.GLPK_CMD())
-  result_dict = {"num_saved": num_nodes-pulp.value(model.objective)}
+  #GLPK expects timeout to be a string in seconds, and an integer
+  timeout_seconds = str(int(timeout/1000))
+  start_time = timePy.time()
+  model.solve(pulp.GLPK_CMD(msg=False, options=['--tmlim', timeout_seconds]))  #Need to get timeout working
+  run_time = timePy.time() - start_time
+  
+  result_dict = {"num_saved": num_nodes-pulp.value(model.objective),"run_time": run_time}
+  if run_time>timeout:
+        result_dict["Timeout"] = True
+  else:
+        result_dict["Timeout"] = False
   
   if __name__ == "__main__":
     for time in range(time_steps):
@@ -117,7 +125,7 @@ def run_ilp(instance_graph, start_node = 1, timeout=1000):
 # For example, you could create a .dzn file in whatever encoding you want
 # and add it using the https://python.minizinc.dev/en/latest/api.html#minizinc.model.Model.add_file capability
 
-def run_cp(instance_graph, start_node = 1, timeout=1000):
+def run_cp(instance_graph, start_node = 1, timeout=10000):
   file_name = "Graph_to_solve.dzn"
   from_list, to_list, num_nodes, start_node = reformat_graph(instance_graph, start_node)
   write_file(from_list, to_list, num_nodes, start_node, file_name)
@@ -129,8 +137,17 @@ def run_cp(instance_graph, start_node = 1, timeout=1000):
   solver = minizinc.Solver.lookup("chuffed")
   instance = minizinc.Instance(solver, model)
   
-  result = instance.solve()
-  result_dict = {"num_saved": num_nodes-result.objective}
+  start_time = timePy.time()
+  result = instance.solve(timeout=timedelta(seconds=timeout/1000))
+  run_time = timePy.time() - start_time
+  
+  if result.objective:
+    result_dict = {"num_saved": num_nodes-result.objective, "run_time": run_time}
+    result_dict["Timeout"] = False
+  else:
+    result_dict = {"num_saved":"Timeout"}
+    result_dict["Timeout"] = True
+        
     
   return (result_dict)
 
@@ -172,13 +189,15 @@ def flatten_graph(graph,node_to_start):
     # ((0,0),(0,1)) becomes (0,1)
     converted_edges = [(one_D_mapping[edge[0]], one_D_mapping[edge[1]]) for edge in edges]
     
-    node_to_start = one_D_mapping[node_to_start]
+    #If node is a vector, change to an integer
+    if node_to_start in one_D_mapping:
+      node_to_start = one_D_mapping[node_to_start]
     
     return converted_edges, node_to_start
         
 if __name__=="__main__":
   graph = nx.path_graph(12)
   # graph = nx.grid_2d_graph(10,10)
-  # cp = run_cp(graph, start_node = (0,5))
-  # print(cp)
-  print(run_ilp(graph))
+  cp = run_cp(graph, start_node = (5))
+  ilp = run_ilp(graph, start_node= (5))
+  print(cp,ilp)
