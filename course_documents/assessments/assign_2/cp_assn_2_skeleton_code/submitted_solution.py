@@ -24,8 +24,9 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
   
   time_steps = num_nodes + 1
 
-  firefighter = pulp.LpVariable.dicts("firefighter", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
+  defended = pulp.LpVariable.dicts("defended", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
   on_fire = pulp.LpVariable.dicts("on_fire", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
+  firefighter_placed = pulp.LpVariable.dicts("firefighter_placed", ((time) for time in range(time_steps)), cat="Binary")
 
   # Objective: Minimize the number of nodes on fire at the final time step
   model = pulp.LpProblem("Firefighter_Problem", pulp.LpMinimize)
@@ -51,34 +52,42 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
   for node in range(num_nodes):
     if node == start_node:
         model += on_fire[0, node] == 1
-        model += firefighter[0, node] == 0
+        model += defended[0, node] == 0
     else:
         model += on_fire[0, node] == 0
 
   # One additional node can be defended at each step
-  model += pulp.lpSum(firefighter[0, node] for node in range(num_nodes)) <=1
+  model += pulp.lpSum(defended[0, node] for node in range(num_nodes)) <=1
+  model += defended[0, firefighter_placed[0]] >= 1
   for time in range(1, time_steps):
-        model += pulp.lpSum(firefighter[time, node] for node in range(num_nodes)) <= pulp.lpSum(firefighter[time, node] for node in range(num_nodes)) + 1
+        #If a firefighter is placed at a node, it becomes defended
+        model += defended[time, firefighter_placed[time]] >= 1
+        # model += pulp.lpSum(defended[time, node] for node in range(num_nodes)) <= pulp.lpSum(defended[time, node] for node in range(num_nodes)) + 1
         
   # Constraints for fire spread and defense behavior over time
   for time in range(1, time_steps):
     for node in range(num_nodes):
       # Nodes continue burning once ignited
       model += on_fire[time, node] >= on_fire[time - 1, node]
-
+      
       # Nodes continue being defended once protected
-      model += firefighter[time, node] >= firefighter[time - 1, node]
+      model += defended[time, node] >= defended[time - 1, node]
 
       # Protected nodes do not catch fire
-      model += on_fire[time, node] <= 1 - firefighter[time, node]
+      model += on_fire[time, node] <= 1 - defended[time, node]
 
       # Nodes on fire cannot be defended
-      model += firefighter[time, node] <= 1 - on_fire[time - 1, node]
+      model += defended[time, node] <= 1 - on_fire[time - 1, node]
 
       # Check for any burning neighbors and, if found, spread the fire
       burning_neighbor = pulp.lpSum(on_fire[time - 1, neighbor] for neighbor in neighbor_dict[node])
-      # Normalise sum to be 1 
-      model += on_fire[time, node] >= burning_neighbor/len(burning_neighbor) - firefighter[time-1, node]
+      # Normalise sum to be 1 or 0 
+      model += on_fire[time, node] >= burning_neighbor/len(burning_neighbor) - defended[time-1, node]
+      
+      # Check for any defended neighbors and, if found, spread the defence
+      defended_neighbor = pulp.lpSum(defended[time - 1, neighbor] for neighbor in neighbor_dict[node])
+      # Normalise sum to be 1 or 0
+      model += defended[time, node] >= defended_neighbor/len(defended_neighbor) - on_fire[time-1, node]
 
   #GLPK expects timeout to be a string in seconds, and an integer
   timeout_seconds = str(int(timeout/1000))
@@ -95,7 +104,7 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
   if __name__ == "__main__":
     for time in range(time_steps):
       # Defended nodes and their values
-      defended_nodes = [(node, pulp.value(firefighter[time, node])) for node in range(num_nodes) if pulp.value(firefighter[time, node]) is not None]
+      defended_nodes = [(node, pulp.value(defended[time, node])) for node in range(num_nodes) if pulp.value(defended[time, node]) is not None]
       
       # On fire nodes and their values
       on_fire_nodes = [(node, pulp.value(on_fire[time, node])) for node in range(num_nodes) if pulp.value(on_fire[time, node]) is not None]
