@@ -18,14 +18,10 @@ from datetime import timedelta
 # or None if the model does not halt in the time allowed
 # (The dictionary structure is so you can return other things if it's 
 # useful for your pipeline)
-def run_ilp(instance_graph, start_node = 1, timeout=10000):
+def run_ilp(instance_graph, start_node = 1, timeout=100000):
     
   from_list, to_list, num_nodes, start_node = reformat_graph(instance_graph, start_node)
   
-  from_list = [0,0,1,1,2,2,3,3,4,4,5];
-  to_list   = [1,4,2,3,5,8,6,8,5,8,7];
-  start_node = 0;
-  num_nodes = 9
   time_steps = num_nodes + 1
 
   defended = pulp.LpVariable.dicts("defended", ((time, node) for time in range(time_steps) for node in range(num_nodes)), cat="Binary")
@@ -83,7 +79,7 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
 
       # Check for any burning neighbors and, if found, spread the fire
       burning_neighbor = pulp.lpSum(on_fire[time - 1, neighbor] for neighbor in neighbor_dict[node])
-      model += on_fire[time, node] >= burning_neighbor/len(burning_neighbor) - defended[time-1, node] - firefighter_placed[time,node]
+      model += on_fire[time, node] >= (burning_neighbor>=1) - defended[time-1, node] - firefighter_placed[time,node]
       
       # Check for any defended neighbors and, if found, spread the defense
       defended_neighbor = pulp.lpSum(defended[time - 1, neighbor] for neighbor in neighbor_dict[node])
@@ -140,7 +136,7 @@ def run_ilp(instance_graph, start_node = 1, timeout=10000):
 # For example, you could create a .dzn file in whatever encoding you want
 # and add it using the https://python.minizinc.dev/en/latest/api.html#minizinc.model.Model.add_file capability
 
-def run_cp(instance_graph, start_node = 1, timeout=10000):
+def run_cp(instance_graph, start_node = 1, timeout=100000):
   file_name = "Graph_to_solve.dzn"
   from_list, to_list, num_nodes, start_node = reformat_graph(instance_graph, start_node)
   write_file(from_list, to_list, num_nodes, start_node, file_name)

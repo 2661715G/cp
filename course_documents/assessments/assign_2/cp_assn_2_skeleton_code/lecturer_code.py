@@ -21,7 +21,7 @@ def generate_ladder_instance():
   return int(height/2), ladder
 
 
-def run_trial(graph, start, timeout=5000):
+def run_trial(graph, start, timeout=100000):
    ilp_result = submitted_solution.run_ilp(graph, start_node=start, timeout=timeout)
    cp_result = submitted_solution.run_cp(graph, start_node=start, timeout=timeout)
    return cp_result['num_saved'], ilp_result['num_saved']
