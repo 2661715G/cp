@@ -79,7 +79,7 @@ def run_ilp(instance_graph, start_node = 1, timeout=100000):
 
       # Check for any burning neighbors and, if found, spread the fire
       burning_neighbor = pulp.lpSum(on_fire[time - 1, neighbor] for neighbor in neighbor_dict[node])
-      model += on_fire[time, node] >= (burning_neighbor>=1) - defended[time-1, node] - firefighter_placed[time,node]
+      model += on_fire[time, node] >= burning_neighbor
       
       # Check for any defended neighbors and, if found, spread the defense
       defended_neighbor = pulp.lpSum(defended[time - 1, neighbor] for neighbor in neighbor_dict[node])
